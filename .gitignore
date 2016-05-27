@@ -1,1 +1,4 @@
 vivado/run/*
+ip/managed_ip_project/*
+*.xpr
+*.xdc
