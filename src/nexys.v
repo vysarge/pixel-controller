@@ -65,15 +65,25 @@ module nexys(
 //////////////////////////////////////////////////////////////////////////////////
 // main module instantiation / data transfer
     
-    //parameters only for later calculations; do not change
+    //parameters for later calculations
+    //grid parameters should be changeable
+    parameter SCREEN_WIDTH = 1024; //number of pixels
     parameter SCREEN_HEIGHT = 768;
-    parameter SCREEN_WIDTH = 1024;
+    parameter GRID_WIDTH = 20; //number of cells
+    parameter GRID_HEIGHT = 15;
+    parameter VGA_WIDTH = 4; // width of each color bus
+    
+    parameter B_S_WIDTH = $clog2(SCREEN_WIDTH-1);
+    parameter B_S_HEIGHT = $clog2(SCREEN_HEIGHT-1);
+    parameter B_WIDTH = $clog2(GRID_WIDTH-1);
+    parameter B_HEIGHT = $clog2(GRID_HEIGHT-1);
+    assign data[3:0] = B_S_HEIGHT;
     
     //inputs and outputs
-    wire [10:0] hcount; //vga
-    wire [10:0] vcount; //vga
+    wire [B_S_WIDTH-1:0] hcount; //vga
+    wire [B_S_HEIGHT-1:0] vcount; //vga
     wire hsync, vsync, blank; //vga
-    wire [11:0] p_rgb; //rgb of current pixel
+    wire [VGA_WIDTH*3-1:0] p_rgb; //rgb of current pixel
     
     reg [7:0] frame_counter;
     reg [3:0] second_counter;
@@ -116,18 +126,36 @@ module nexys(
           .hsync(hsync),.vsync(vsync),.blank(blank));
     
     //test pixel output
-    wire[3:0] p_r, p_g, p_b;
+    /*wire[3:0] p_r, p_g, p_b;
     assign p_r = (hcount >= vcount) ? 4'hF : 4'h0;
     assign p_g = (hcount > (SCREEN_WIDTH >> 1)) ? 4'hF : 4'h0;
     assign p_b = (vcount > (SCREEN_HEIGHT >> 1)) ? 4'hF : 4'h0;
     assign p_rgb = {p_r, p_g, p_b};
+    */
+    
+    //inputs to matrix display module
+    reg [VGA_WIDTH*3-1:0] cell_rgb;
+    reg [B_WIDTH-1:0] cell_x;
+    reg [B_HEIGHT-1:0] cell_y;
+    reg cell_en;
+    reg update;
+    //(...) outputs
+    wire [VGA_WIDTH*3-1:0] p_rgb;
+    wire p_hsync;
+    wire p_vsync;
+    
+    matrix_display#(.S_WIDTH(SCREEN_WIDTH), .S_HEIGHT(SCREEN_HEIGHT), .WIDTH(GRID_WIDTH), .HEIGHT(GRID_HEIGHT), 
+                    .B_S_WIDTH(B_S_WIDTH), .B_S_HEIGHT(B_S_HEIGHT), 
+                    .B_WIDTH(B_WIDTH), .B_HEIGHT(B_HEIGHT), .B_VGA(VGA_WIDTH)) 
+           display(.cell_rgb(cell_rgb), .cell_x(cell_x), .cell_en(cell_en), .update(display_update), .hcount(hcount), .vcount(vcount),
+                    .hsync(hsync), .vsync(vsync), .vclock(clock_65mhz), .blank(blank), .p_rgb(p_rgb), .p_hsync(p_hsync), .p_vsync(p_vsync));
     
     //vga output.
-    assign VGA_R = blank ? 0: p_rgb[11:8];
-    assign VGA_G = blank ? 0: p_rgb[7:4];
-    assign VGA_B = blank ? 0: p_rgb[3:0];
-    assign VGA_HS = ~hsync;
-    assign VGA_VS = ~vsync;
+    assign VGA_R = p_rgb[11:8];
+    assign VGA_G = p_rgb[7:4];
+    assign VGA_B = p_rgb[3:0];
+    assign VGA_HS = ~p_hsync;
+    assign VGA_VS = ~p_vsync;
     
 
     
