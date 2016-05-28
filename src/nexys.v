@@ -77,7 +77,6 @@ module nexys(
     parameter B_S_HEIGHT = $clog2(SCREEN_HEIGHT-1);
     parameter B_WIDTH = $clog2(GRID_WIDTH-1);
     parameter B_HEIGHT = $clog2(GRID_HEIGHT-1);
-    assign data[3:0] = B_S_HEIGHT;
     
     //inputs and outputs
     wire [B_S_WIDTH-1:0] hcount; //vga
@@ -85,22 +84,72 @@ module nexys(
     wire hsync, vsync, blank; //vga
     wire [VGA_WIDTH*3-1:0] p_rgb; //rgb of current pixel
     
+    //counter (clock test)
     reg [7:0] frame_counter;
     reg [3:0] second_counter;
     assign data[31:28] = second_counter;
     
+    
+    //inputs to matrix display module
+    reg [VGA_WIDTH*3-1:0] cell_rgb;
+    reg [VGA_WIDTH-1:0] cell_r;
+    reg [VGA_WIDTH-1:0] cell_g;
+    reg [VGA_WIDTH-1:0] cell_b;
+    reg [B_WIDTH-1:0] xcount;
+    reg [B_HEIGHT-1:0] ycount;
+    reg cell_en;
+    reg display_update;
+    reg [VGA_WIDTH*3-1:0] background;
+    //(...) outputs
+    wire [VGA_WIDTH*3-1:0] p_rgb;
+    wire p_hsync;
+    wire p_vsync;
+    
+    //passing data in
+    reg passing_data;
+    
     always @(posedge clock_65mhz) begin
         //every frame
         if (hcount == 0 && vcount == 0) begin
+            background <= 12'hFFF;
+            passing_data <= 1;
+            display_update <= 1;
             frame_counter <= frame_counter + 1;
-            if (frame_counter == 59) begin
-                frame_counter <= 0;
+            if (frame_counter == 0) begin
                 second_counter <= second_counter + 1;
             end
         end
+        else if (display_update) begin //pull update low after only one cycle
+            display_update <= 0;
+        end
         
         //every clock tick
-        //
+        if (passing_data && cell_en) begin
+            cell_en <= 0; //pulse low again
+            
+            if (xcount == GRID_WIDTH - 1) begin //step through all cells
+                xcount <= 0;
+                ycount <= ycount + 1;
+            end
+            else begin
+                xcount <= xcount + 1;
+            end
+            cell_r <= {second_counter[1:0], frame_counter[7:6]} + 1 + xcount + ycount;
+            cell_g <= 1 + xcount + ycount * GRID_WIDTH;
+            cell_b <= 1 + xcount + ycount;
+            cell_rgb <= {cell_r, cell_g, cell_b};
+            //1 + xcount + ycount * GRID_WIDTH + {second_counter, frame_counter[7:5]};
+        end
+        else if (passing_data) begin
+            cell_en <= 1; //send pulse high to pass in data stored.
+            
+            //if on final cell
+            if (xcount == GRID_WIDTH-1) begin
+                if (ycount == GRID_HEIGHT-1) begin
+                    passing_data <= 0; //finished sending in data
+                end
+            end
+        end
     end
     
     //debouncing switches for test input
@@ -133,22 +182,15 @@ module nexys(
     assign p_rgb = {p_r, p_g, p_b};
     */
     
-    //inputs to matrix display module
-    reg [VGA_WIDTH*3-1:0] cell_rgb;
-    reg [B_WIDTH-1:0] cell_x;
-    reg [B_HEIGHT-1:0] cell_y;
-    reg cell_en;
-    reg update;
-    //(...) outputs
-    wire [VGA_WIDTH*3-1:0] p_rgb;
-    wire p_hsync;
-    wire p_vsync;
+    
     
     matrix_display#(.S_WIDTH(SCREEN_WIDTH), .S_HEIGHT(SCREEN_HEIGHT), .WIDTH(GRID_WIDTH), .HEIGHT(GRID_HEIGHT), 
                     .B_S_WIDTH(B_S_WIDTH), .B_S_HEIGHT(B_S_HEIGHT), 
                     .B_WIDTH(B_WIDTH), .B_HEIGHT(B_HEIGHT), .B_VGA(VGA_WIDTH)) 
-           display(.cell_rgb(cell_rgb), .cell_x(cell_x), .cell_en(cell_en), .update(display_update), .hcount(hcount), .vcount(vcount),
-                    .hsync(hsync), .vsync(vsync), .vclock(clock_65mhz), .blank(blank), .p_rgb(p_rgb), .p_hsync(p_hsync), .p_vsync(p_vsync));
+           display(.cell_rgb(cell_rgb), .cell_x(xcount), .cell_y(ycount), .cell_en(cell_en), .update(display_update), 
+                    .hcount(hcount), .vcount(vcount),
+                    .hsync(hsync), .vsync(vsync), .vclock(clock_65mhz), .blank(blank), .background(background), .p_rgb(p_rgb), 
+                    .p_hsync(p_hsync), .p_vsync(p_vsync));
     
     //vga output.
     assign VGA_R = p_rgb[11:8];
