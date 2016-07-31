@@ -62,6 +62,25 @@ module nexys(
     assign SEG[6:0] = segments;
     assign SEG[7] = 1'b1;
     
+    //debouncing switches for test input
+    wire sw0, sw1, sw2, sw3, sw4, sw5, sw6, sw7, sw8, sw9, sw10, sw11, sw12, sw13, sw14, sw15;
+    debounce s0(.reset(reset),.clock(clock_65mhz),.noisy(SW[0]),.clean(sw0));
+    debounce s1(.reset(reset),.clock(clock_65mhz),.noisy(SW[1]),.clean(sw1));
+    debounce s2(.reset(reset),.clock(clock_65mhz),.noisy(SW[2]),.clean(sw2));
+    debounce s3(.reset(reset),.clock(clock_65mhz),.noisy(SW[3]),.clean(sw3));
+    debounce s4(.reset(reset),.clock(clock_65mhz),.noisy(SW[4]),.clean(sw4));
+    debounce s5(.reset(reset),.clock(clock_65mhz),.noisy(SW[5]),.clean(sw5));
+    debounce s6(.reset(reset),.clock(clock_65mhz),.noisy(SW[6]),.clean(sw6));
+    debounce s7(.reset(reset),.clock(clock_65mhz),.noisy(SW[7]),.clean(sw7));
+    debounce s8(.reset(reset),.clock(clock_65mhz),.noisy(SW[8]),.clean(sw8));
+    debounce s9(.reset(reset),.clock(clock_65mhz),.noisy(SW[9]),.clean(sw9));
+    debounce s10(.reset(reset),.clock(clock_65mhz),.noisy(SW[10]),.clean(sw10));
+    debounce s11(.reset(reset),.clock(clock_65mhz),.noisy(SW[11]),.clean(sw11));
+    debounce s12(.reset(reset),.clock(clock_65mhz),.noisy(SW[12]),.clean(sw12));
+    debounce s13(.reset(reset),.clock(clock_65mhz),.noisy(SW[13]),.clean(sw13));
+    debounce s14(.reset(reset),.clock(clock_65mhz),.noisy(SW[14]),.clean(sw14));
+    debounce s15(.reset(reset),.clock(clock_65mhz),.noisy(SW[15]),.clean(sw15));
+    
 //////////////////////////////////////////////////////////////////////////////////
 // main module instantiation / data transfer
     
@@ -97,7 +116,7 @@ module nexys(
     reg [VGA_WIDTH-1:0] cell_b;
     reg [B_WIDTH-1:0] xcount;
     reg [B_HEIGHT-1:0] ycount;
-    reg cell_en;
+    //reg cell_en;
     reg display_update;
     reg [VGA_WIDTH*3-1:0] background;
     //(...) outputs
@@ -107,13 +126,14 @@ module nexys(
     
     //passing data in
     reg passing_data;
+    wire cell_en;
+    assign cell_en = clock_65mhz & passing_data;
     
     always @(posedge clock_65mhz) begin
         //every frame
         if (hcount == 0 && vcount == 0) begin
             background <= 12'hFFF;
             passing_data <= 1;
-            display_update <= 1;
             frame_counter <= frame_counter + 1;
             if (frame_counter == 0) begin
                 second_counter <= second_counter + 1;
@@ -123,8 +143,28 @@ module nexys(
             display_update <= 0;
         end
         
+        if (passing_data) begin
+            if (xcount == GRID_WIDTH - 1 && ycount == GRID_HEIGHT - 1) begin //turn off when done
+                passing_data <= 0;
+                xcount <= 0;
+                ycount <= 0;
+                display_update <= 1;
+            end
+            else if (xcount == GRID_WIDTH - 1) begin //step through all cells
+                xcount <= 0;
+                ycount <= ycount + 1;
+            end
+            else begin
+                xcount <= xcount + 1;
+            end
+            cell_r <= sw0 ? {second_counter[1:0], frame_counter[7:6]} : 0;
+            cell_g <= {sw15, sw14, sw13, sw12};
+            cell_b <= sw1 ? 4'hF : 0; //? (1 + xcount + ycount) : 0;
+            cell_rgb <= {cell_r, cell_g, cell_b};
+        end
+        
         //every clock tick
-        if (passing_data && cell_en) begin
+        /*if (passing_data && cell_en) begin
             cell_en <= 0; //pulse low again
             
             if (xcount == GRID_WIDTH - 1) begin //step through all cells
@@ -149,26 +189,10 @@ module nexys(
                     passing_data <= 0; //finished sending in data
                 end
             end
-        end
+        end*/
     end
     
-    //debouncing switches for test input
-    wire sw1, sw2, sw3, sw4, sw5, sw6, sw7, sw8, sw9, sw10, sw11, sw12, sw13, sw14, sw15;
-    debounce s1(.reset(reset),.clock(clock_65mhz),.noisy(SW[1]),.clean(sw1));
-    debounce s2(.reset(reset),.clock(clock_65mhz),.noisy(SW[2]),.clean(sw2));
-    debounce s3(.reset(reset),.clock(clock_65mhz),.noisy(SW[3]),.clean(sw3));
-    debounce s4(.reset(reset),.clock(clock_65mhz),.noisy(SW[4]),.clean(sw4));
-    debounce s5(.reset(reset),.clock(clock_65mhz),.noisy(SW[5]),.clean(sw5));
-    debounce s6(.reset(reset),.clock(clock_65mhz),.noisy(SW[6]),.clean(sw6));
-    debounce s7(.reset(reset),.clock(clock_65mhz),.noisy(SW[7]),.clean(sw7));
-    debounce s8(.reset(reset),.clock(clock_65mhz),.noisy(SW[8]),.clean(sw8));
-    debounce s9(.reset(reset),.clock(clock_65mhz),.noisy(SW[9]),.clean(sw9));
-    debounce s10(.reset(reset),.clock(clock_65mhz),.noisy(SW[10]),.clean(sw10));
-    debounce s11(.reset(reset),.clock(clock_65mhz),.noisy(SW[11]),.clean(sw11));
-    debounce s12(.reset(reset),.clock(clock_65mhz),.noisy(SW[12]),.clean(sw12));
-    debounce s13(.reset(reset),.clock(clock_65mhz),.noisy(SW[13]),.clean(sw13));
-    debounce s14(.reset(reset),.clock(clock_65mhz),.noisy(SW[14]),.clean(sw14));
-    debounce s15(.reset(reset),.clock(clock_65mhz),.noisy(SW[15]),.clean(sw15));
+    
     
     //vga signal generation
     xvga vga1(.vclock(clock_65mhz),.hcount(hcount),.vcount(vcount),
